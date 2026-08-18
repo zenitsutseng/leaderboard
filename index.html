@@ -402,6 +402,17 @@
   #lbList li span.s{font-family:'Space Mono',monospace; color:var(--gold); font-weight:700;}
   .lb-empty{font-size:12px; opacity:0.6; text-align:center; padding:6px 0;}
 
+  .side-lb{
+    background:rgba(0,0,0,0.22); border:1px solid rgba(232,178,61,0.2);
+    border-radius:10px; padding:8px 10px 10px; max-height:220px; overflow-y:auto;
+  }
+  .side-lb-list{margin:6px 0 0; padding-left:20px; font-size:12px;}
+  .side-lb-list li{margin:4px 0; display:flex; justify-content:space-between; gap:8px;}
+  .side-lb-list li .n{opacity:0.85; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:90px;}
+  .side-lb-list li .s{font-family:'Space Mono',monospace; color:var(--gold); font-weight:700; flex-shrink:0;}
+  .side-lb-list li.me{color:var(--gold);}
+  .lb-empty-row{list-style:none; margin-left:-20px; font-size:12px; opacity:0.55; text-align:center;}
+
   footer{
     text-align:center; font-size:11px; color:rgba(245,230,200,0.35); padding:8px 0 12px;
   }
@@ -428,6 +439,11 @@
 
       <div class="ticket" id="ticket">
         <div class="no-order">目前沒有點單<br>等待客人上門…</div>
+      </div>
+
+      <div class="side-lb" id="sideLb">
+        <div class="queue-title">🏆 今日 TOP 10</div>
+        <ol id="sideLbList" class="side-lb-list"><li class="lb-empty-row">載入中…</li></ol>
       </div>
     </div>
 
@@ -520,7 +536,7 @@
   const MAX_QUEUE = 3;
   const SPAWN_MIN = 3200, SPAWN_MAX = 5200;
   const BASE_PATIENCE = 24000; // ms, reduced per day
-  const API_BASE = "https://egg-crepe-leaderboard.zentisu.workers.dev"; // <- 部署完 Cloudflare Worker 後，把網址貼在這裡，例如 "https://egg-crepe-leaderboard.xxx.workers.dev"
+  const API_BASE = "https://egg-crepe-leaderboard.zentisu.workers.dev";
 
   // ---------- STATE ----------
   let money=0, day=1, rating=5, comboCount=0, bestCombo=0, served=0;
@@ -543,6 +559,7 @@
   const startOverlay=$('#startOverlay'), endOverlay=$('#endOverlay');
   const nicknameInput=$('#nicknameInput'), submitScoreBtn=$('#submitScoreBtn'), submitMsg=$('#submitMsg');
   const showLbBtn=$('#showLbBtn'), leaderboardBox=$('#leaderboardBox'), lbList=$('#lbList');
+  const sideLbList=$('#sideLbList');
 
   const FILLING_POS = {
     cheese:{left:'22%', top:'26%'}, corn:{left:'62%', top:'22%'},
@@ -981,6 +998,7 @@
         submitMsg.className='submit-msg ok';
         try{ localStorage.setItem('eggCrepeNickname', nickname); }catch(e){}
         loadLeaderboard();
+        loadSideLeaderboard();
         leaderboardBox.style.display='block';
         showLbBtn.textContent='收起排行榜 «';
       } else {
@@ -1017,6 +1035,37 @@
     }catch(err){
       lbList.innerHTML='<div class="lb-empty">載入失敗，稍後再試</div>';
     }
+  }
+
+  async function loadSideLeaderboard(){
+    if(!sideLbList) return;
+    if(!API_BASE){
+      sideLbList.innerHTML='<li class="lb-empty-row">尚未設定後端網址</li>';
+      return;
+    }
+    try{
+      const res = await fetch(API_BASE+'/leaderboard?limit=10&scope=today');
+      const data = await res.json();
+      if(!data.ok || !data.leaderboard || !data.leaderboard.length){
+        sideLbList.innerHTML='<li class="lb-empty-row">今天還沒有紀錄</li>';
+        return;
+      }
+      sideLbList.innerHTML='';
+      data.leaderboard.forEach((row,i)=>{
+        const li=document.createElement('li');
+        li.innerHTML='<span class="n">'+(i+1)+'. '+escapeHtml(row.nickname)+'</span><span class="s">$'+row.score+'</span>';
+        sideLbList.appendChild(li);
+      });
+    }catch(err){
+      sideLbList.innerHTML='<li class="lb-empty-row">載入失敗</li>';
+    }
+  }
+
+  let sideLbTimer=null;
+  function startSideLbPolling(){
+    loadSideLeaderboard();
+    clearInterval(sideLbTimer);
+    sideLbTimer=setInterval(loadSideLeaderboard, 20000);
   }
 
   function escapeHtml(s){
@@ -1071,6 +1120,7 @@
   // init
   renderHud();
   updateButtons();
+  startSideLbPolling();
 })();
 </script>
 </body>
